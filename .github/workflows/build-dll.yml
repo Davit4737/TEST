@@ -16,9 +16,11 @@ jobs:
         run: cmake --version
 
       - name: Configure
-        run: cmake -S . -B build -DCMAKE_POLICY_VERSION_MINIMUM=3.5
+        shell: cmd
+        run: cmake -S . -B build "-DCMAKE_POLICY_VERSION_MINIMUM=3.5"
 
       - name: Build Release
+        shell: cmd
         run: cmake --build build --config Release
 
       - name: Check the DLL actually got built
