@@ -23,14 +23,22 @@ namespace YimMenu::Features
 			return true;
 		}
 
-		int GetAimedTarget(int playerId, int self)
+		int GetAttackTarget(int playerId, int self, const rage::fvector3& pos)
 		{
 			int target = 0;
+
+			// if we somehow do have a lock-on / free-aim target, prefer it
 			if (PLAYER::GET_ENTITY_PLAYER_IS_FREE_AIMING_AT(playerId, &target) && IsValidAttackTarget(target, self))
 				return target;
 
 			if (PLAYER::GET_PLAYER_TARGET_ENTITY(playerId, &target) && IsValidAttackTarget(target, self))
 				return target;
+
+			// animals have no weapon and no aim reticle, so the two calls above almost
+			// always come back empty -- fall back to grabbing the nearest ped around us
+			int closest = 0;
+			if (PED::GET_CLOSEST_PED(pos.x, pos.y, pos.z, 25.0f, true, true, &closest, false, false, false, -1) && IsValidAttackTarget(closest, self))
+				return closest;
 
 			return 0;
 		}
@@ -40,7 +48,8 @@ namespace YimMenu::Features
 	// matter what flags you clear: the player's melee task is built around the
 	// human moveset/skeleton, and animal peds don't have that moveset to play. The
 	// only thing that actually makes an animal ped attack is forcing the game's own
-	// animal combat task onto whatever you're aiming/locked onto.
+	// animal combat task onto a target. And since animals can't aim or lock on, we
+	// pick that target ourselves -- the nearest ped -- when you press attack.
 	class AnimalAttack : public LoopedCommand
 	{
 		using LoopedCommand::LoopedCommand;
@@ -74,18 +83,18 @@ namespace YimMenu::Features
 			const int handle   = ped.GetHandle();
 			const int playerId = Self::GetPlayer().GetId();
 
-			const auto target = GetAimedTarget(playerId, handle);
-			if (!target)
-				return;
-
-			const bool wantsAttack = PAD::IS_CONTROL_PRESSED(0, (Hash)NativeInputs::INPUT_ATTACK)
-			    || PAD::IS_CONTROL_PRESSED(0, (Hash)NativeInputs::INPUT_MELEE_ATTACK)
-			    || PAD::IS_CONTROL_PRESSED(0, (Hash)NativeInputs::INPUT_ATTACK2);
+			// only act on a fresh attack-button press, so we don't re-issue the task
+			// every single frame while the button is held
+			const bool wantsAttack = PAD::IS_CONTROL_JUST_PRESSED(0, (Hash)NativeInputs::INPUT_ATTACK)
+			    || PAD::IS_CONTROL_JUST_PRESSED(0, (Hash)NativeInputs::INPUT_MELEE_ATTACK)
+			    || PAD::IS_CONTROL_JUST_PRESSED(0, (Hash)NativeInputs::INPUT_ATTACK2);
 
 			if (!wantsAttack)
 				return;
 
-			if (PED::IS_PED_IN_COMBAT(handle, target))
+			const auto pos    = ped.GetPosition();
+			const int  target = GetAttackTarget(playerId, handle, pos);
+			if (!target)
 				return;
 
 			ped.ForceControl();
@@ -98,5 +107,5 @@ namespace YimMenu::Features
 		}
 	};
 
-	static AnimalAttack _AnimalAttack{"animalattack", "Animal Attack", "Makes your animal or bird player model attack whatever you're aiming at"};
+	static AnimalAttack _AnimalAttack{"animalattack", "Animal Attack", "As an animal/bird player model, press attack to charge the nearest ped"};
 }
