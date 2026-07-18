@@ -21,8 +21,10 @@ namespace YimMenu::Features
 	static FloatCommand _BirdFlightSpeed{"birdflightspeed", "Flight Speed", "Features", 1.0f, 40.0f, 12.0f};
 
 	// This is NOT the game's flight task -- RDR2 has no player-drivable one for bird
-	// peds. This drives the ped with velocity instead of teleporting it (the way
-	// Noclip does), so collision, landing and perching still behave normally.
+	// peds. A plain SET_ENTITY_VELOCITY does not stick on the local player ped: its
+	// own locomotion task recomputes velocity every tick and overwrites it (see the
+	// abandoned SetVelocity branch in Noclip.cpp). So like Noclip, we step the ped's
+	// position directly each tick instead of trying to push it with velocity.
 	class BirdFlight : public LoopedCommand
 	{
 		using LoopedCommand::LoopedCommand;
@@ -47,8 +49,9 @@ namespace YimMenu::Features
 			if (!ped)
 				return;
 
-			// only animal models -- flying Arthur looks like a bug, not a feature
-			if (!ped.IsAnimal())
+			// animal models, plus birds specifically in case they aren't classed as animals --
+			// flying Arthur looks like a bug, not a feature
+			if (!ped.IsAnimal() && !PED::_GET_IS_BIRD(ped.GetHandle()))
 				return;
 
 			// clean up if we swapped ped since last tick
@@ -93,33 +96,32 @@ namespace YimMenu::Features
 			const auto camRot = CAM::GET_GAMEPLAY_CAM_ROT(2);
 			ped.SetRotation({camRot.x * 0.5f, 0.0f, camRot.z});
 
+			// kill any velocity the ped's own locomotion task tried to apply this tick
+			ped.SetVelocity({});
+
 			if (vel.x == 0.f && vel.y == 0.f && vel.z == 0.f)
-			{
-				// hover in place rather than sinking
-				ped.SetVelocity({});
-				return;
-			}
+				return; // hover in place
 
 			float speed = _BirdFlightSpeed.GetState();
 
 			if (PAD::IS_DISABLED_CONTROL_PRESSED(0, (int)NativeInputs::INPUT_SPRINT))
 				speed *= 2.0f;
 
-			// convert the local input vector into a world-space direction
-			const auto position = ped.GetPosition();
-			const auto offset   = ENTITY::GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(handle, vel.x, vel.y, vel.z);
-
-			rage::fvector3 dir{offset.x - position.x, offset.y - position.y, offset.z - position.z};
-
-			const float length = std::sqrt(dir.x * dir.x + dir.y * dir.y + dir.z * dir.z);
+			const float length = std::sqrt(vel.x * vel.x + vel.y * vel.y + vel.z * vel.z);
 			if (length > 0.0001f)
 			{
-				dir.x /= length;
-				dir.y /= length;
-				dir.z /= length;
+				vel.x /= length;
+				vel.y /= length;
+				vel.z /= length;
 			}
 
-			ped.SetVelocity({dir.x * speed, dir.y * speed, dir.z * speed});
+			// distance to cover this tick, scaled by real elapsed time so speed is framerate-independent
+			const float step = speed * MISC::GET_FRAME_TIME();
+
+			// GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS turns the local-space step into a world-space
+			// target point; teleporting there each tick is what actually moves the ped (see comment above)
+			const auto offset = ENTITY::GET_OFFSET_FROM_ENTITY_IN_WORLD_COORDS(handle, vel.x * step, vel.y * step, vel.z * step);
+			ped.SetPosition({offset.x, offset.y, offset.z});
 		}
 
 		virtual void OnDisable() override
