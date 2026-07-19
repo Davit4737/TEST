@@ -52,7 +52,7 @@ namespace YimMenu::Features
 
 		int GetAimedPedTarget(int playerId, int selfHandle)
 		{
-			Entity target = 0;
+			int target = 0;
 			if (PLAYER::GET_ENTITY_PLAYER_IS_FREE_AIMING_AT(playerId, &target) && IsValidAttackTarget(target, selfHandle))
 				return target;
 
@@ -84,7 +84,7 @@ namespace YimMenu::Features
 			ped.ForceControl();
 			ConfigureCombatAnimal(pedHandle);
 
-			if (PED::_GET_IS_BIRD(pedHandle))
+			if (ENTITY::_GET_IS_BIRD(pedHandle))
 			{
 				TASK::TASK_COMBAT_PED(pedHandle, target, 0, 16);
 				return;
@@ -95,7 +95,7 @@ namespace YimMenu::Features
 
 		void TickBirdFlight(Ped ped)
 		{
-			if (!PED::_GET_IS_BIRD(ped.GetHandle()))
+			if (!ENTITY::_GET_IS_BIRD(ped.GetHandle()))
 				return;
 
 			if (GUI::IsOpen())
@@ -142,7 +142,7 @@ namespace YimMenu::Features
 		void RestoreGravityIfNeeded(Ped ped)
 		{
 			const int pedHandle = ped.GetHandle();
-			if (PED::_GET_IS_BIRD(pedHandle))
+			if (ENTITY::_GET_IS_BIRD(pedHandle))
 				return;
 
 			PED::SET_PED_GRAVITY(pedHandle, true);
@@ -198,7 +198,7 @@ namespace YimMenu::Features
 		ConfigureCombatAnimal(pedHandle);
 		PED::SET_PED_KEEP_TASK(pedHandle, true);
 
-		if (PED::_GET_IS_BIRD(pedHandle))
+		if (ENTITY::_GET_IS_BIRD(pedHandle))
 		{
 			PED::SET_PED_GRAVITY(pedHandle, false);
 			ENTITY::SET_ENTITY_HAS_GRAVITY(pedHandle, false);
